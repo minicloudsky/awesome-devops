@@ -1,0 +1,96 @@
+stages:
+  - test_build_golang
+  - test_build
+  - prod_build_golang
+  - prod_build
+
+
+test_build_golang:
+  image: golang:1.21
+  stage: test_build_golang
+  tags:
+    - test
+  only:
+    - web
+    - api
+  except:
+    - /^(?!test$).*/
+  script:
+    - export GO111MODULE=on
+    - export GOPROXY=https://goproxy.io,direct
+    - go build
+  artifacts:
+    expire_in: 7 day
+    paths:
+      - my-app-name
+
+test_build_image:
+  image: docker:latest
+  stage: test_build
+  tags:
+    - test
+  only:
+    - web
+    - api
+  except:
+    - /^(?!test$).*/
+  script:
+    - build_time=$(date +%Y%m%d%H%M%S)
+    - echo "FROM centos:7" > ./Dockerfile
+    - echo "RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo "Asia/Shanghai" > /etc/timezone" >> ./Dockerfile
+    - echo "RUN mkdir -p /data/config" >> ./Dockerfile
+    - echo "ADD my-app-name /data" >> ./Dockerfile
+    - echo "WORKDIR /data" >> ./Dockerfile
+    - echo "CMD ./app-name --config xxx.yaml" >> ./Dockerfile
+    - docker build -t hub.docker.com/username/$CI_PROJECT_NAME:$build_time .
+    - echo $DOCKER_PASSWORD | docker login hub.docker.com --username $REGISTRY_USER --password-stdin
+    - docker push hub.docker.com/username/$CI_PROJECT_NAME:$build_time
+    - echo img_version:hub.docker.com/username/$CI_PROJECT_NAME:$build_time
+#    更新k8s deployment 镜像，完成应用的发布上线
+    - kubectl --kubeconfig ~/.kube/config set image deployment/my-app-name my-app-name=hub.docker.com/username/$CI_PROJECT_NAME:$build_time -n k8s-namespace-name
+
+
+prod_build_golang:
+  image: golang:1.21
+  stage: prod_build_golang
+  tags:
+    - prod
+  only:
+    - web
+    - api
+  except:
+    - /^(?!master).*/
+  script:
+    - export GO111MODULE=on
+    - export GOPROXY=https://goproxy.io,direct
+    - go build
+  artifacts:
+    expire_in: 7 day
+    paths:
+      - my-app-name
+
+prod_build:
+  image: docker:latest
+  stage: prod_build
+  tags:
+    - prod
+  only:
+    - web
+    - api
+  except:
+    - /^(?!master).*/
+  script:
+    - build_time=$(date +%Y%m%d%H%M%S)
+    - echo "FROM centos:7" > ./Dockerfile
+    - echo "RUN mkdir -p /data/conf" >> ./Dockerfile
+    - echo "RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo "Asia/Shanghai" > /etc/timezone" >> ./Dockerfile
+    - echo "ADD conf/ /data/conf" >> ./Dockerfile
+    - echo "ADD my-app-name /data" >> ./Dockerfile
+    - echo "WORKDIR /data" >> ./Dockerfile
+    - echo "CMD ./my-app-name" >> ./Dockerfile
+    - docker build -t hub.docker.com/username/$CI_PROJECT_NAME:$build_time .
+    - echo $DOCKER_PASSWORD | docker login hub.docker.com --username $REGISTRY_USER --password-stdin
+    - docker push hub.docker.com/username/$CI_PROJECT_NAME:$build_time
+    - echo img_version:hub.docker.com/username/$CI_PROJECT_NAME:$build_time
+    #    更新k8s deployment 镜像，完成应用的发布上线
+    - kubectl --kubeconfig ~/.kube/config set image deployment/my-app-name my-app-name=hub.docker.com/username/$CI_PROJECT_NAME:$build_time -n k8s-namespace-name

@@ -1,0 +1,162 @@
+pipeline {
+    agent {
+        label "jenkins node label"
+    }
+    options {
+        skipDefaultCheckout()
+    }
+    parameters {
+        string(name: 'PARAM1')
+        string(name: 'PARAM2')
+    }
+    stages {
+        stage('init') {
+            steps {
+                script {
+                    try {
+                        // init something
+                    } catch (Exception e) {
+                        error "error ${e}"
+                    }
+                }
+            }
+        }
+        stage('do something') {
+            when {
+                expression {
+                    script {
+                        return true || false
+                    }
+                }
+            }
+            steps {
+                script {
+                    if (sth) {
+                        // do sth
+                    }
+                    do sth
+                }
+            }
+        }
+        stage('check or compile source code') {
+            failFast false
+            parallel {
+                stage("compile") {
+                    when {
+                        expression {
+                            script {
+                                return true || false
+                            }
+                        }
+                    }
+                    steps {
+                        script {
+                            // do code compile
+                        }
+                    }
+                }
+                stage("check code quality") {
+                    when {
+                        expression {
+                            script {
+                                return NeedCheckCode ?
+                            }
+                        }
+                    }
+                    steps {
+                        script {
+                            // do sth
+                        }
+                    }
+                }
+                stage("sonar check code") {
+                    when {
+                        expression {
+                            script {
+                                def check = true
+                                def branch = "test"
+                                if (branch == "master" || branch == "uat") {
+                                    check = false
+                                }
+                                return check
+                            }
+                        }
+                    }
+                    steps {
+                        script {
+                            files = xxx.getChangedFiles()
+                            sonarCheck(fileNames.join(","))
+                        }
+                    }
+                }
+                stage("notify ci backend service") {
+                    steps {
+                        script {
+                            ciService.DoCallback(
+                                    currentBuild.number,
+                                    currentBuild.startTimeInMillis,
+                                    0,
+                                    params1,
+                                    params2,
+                                    "building",
+                                    "",
+                                    "stage of compile code",
+                                    imageName
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        stage('generate image') {
+            parallel {
+                stage("generate docker image") {
+                    steps {
+                        script {
+                            imageName = sth.GetImage()
+                        }
+                    }
+                }
+                stage("notify backend service") {
+                    steps {
+                        script {
+                            sthService.doCallback(
+                                    currentBuild.number,
+                                    currentBuild.startTimeInMillis,
+                                    0,
+                                    params123,
+                                    "BUILDING",
+                                    "",
+                                    "generate docker image",
+                                    imageName
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        stage("end pipeline") {
+            steps {
+                echo "pipeline finished"
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                sthService.doPipelineCallback(
+                        currentBuild.number,
+                        currentBuild.startTimeInMillis,
+                        currentBuild.getStartTimeInMillis() + currentBuild.getDuration(),
+                        params1,
+                        params2,
+                        currentBuild.result,
+                        "",
+                        "end pipeline",
+                        imageName
+                )
+            }
+        }
+    }
+}

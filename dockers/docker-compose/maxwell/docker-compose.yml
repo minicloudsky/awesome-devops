@@ -1,0 +1,10 @@
+---
+version: '3'
+services:
+  maxwell:
+    image: zendesk/maxwell
+    container_name: maxwell
+    environment:
+      USER: root
+      PASSWORD: root
+      HOST: 127.0.0.1
